@@ -3,6 +3,7 @@ import { ArrowDownUp, ArrowRight, ArrowUpRight, Check, ChevronDown, Clock3, Comp
 import { CUISINES, type Coordinates, type Cuisine, type Restaurant, type SearchResponse } from '../shared/types';
 import { directionsUrl, filterRestaurants, formatDistance, pickRestaurant, type Filters } from '../shared/logic';
 import { DEMO_CENTER, DEMO_RESTAURANTS } from './demo';
+import { PhotoAttributions, RestaurantPhoto } from './RestaurantPhoto';
 
 type InfoPanel = 'help' | 'privacy' | 'terms' | null;
 const priceLabels = ['免費', '$', '$$', '$$$', '$$$$'];
@@ -29,10 +30,9 @@ function Modal({ title, children, onClose, className = '' }: { title: string; ch
 function RestaurantCard({ restaurant: r, saved, onSave, onDetails }: { restaurant: Restaurant; saved: boolean; onSave: () => void; onDetails: () => void }) {
   return <article className="restaurant-card">
     <div className="card-image">
-      <button className="image-button" onClick={onDetails} aria-label={`查看 ${r.name} 詳細資訊`}><img src={r.image} alt={`${cuisineLabel(r)}料理示意`} loading="lazy"/></button>
+      <RestaurantPhoto restaurant={r} onDetails={onDetails}/>
       {r.openNow !== null && <span className={`open-badge ${r.openNow ? '' : 'closed'}`}><i/>{r.openNow ? '營業中' : '目前休息中'}</span>}
       <button className={`save-button ${saved ? 'saved' : ''}`} onClick={onSave} aria-label={`${saved ? '取消收藏' : '收藏'} ${r.name}`} aria-pressed={saved}><Heart size={19} fill={saved ? 'currentColor' : 'none'}/></button>
-      <span className="image-caption">料理示意</span>
     </div>
     <div className="card-content">
       <span className="cuisine-label">{cuisineLabel(r)}</span>
@@ -214,7 +214,7 @@ export default function App() {
             </div>
             {!loading && filtered.length > visibleCount && <button className="load-more" onClick={() => setVisibleCount(count => count + 6)}>再多看幾家<span>還有 {filtered.length - visibleCount} 家好味道</span><ChevronDown size={15}/></button>}
             {limited && <p className="result-footnote">{source === 'google' ? '本次最多取得 Google 距離最近的 20 家餐廳' : '本次最多顯示 200 家餐廳'}；可調整料理類型與範圍重新搜尋。</p>}
-            <p className="result-footnote">{sort === 'recommended' ? '推薦排序綜合評分、評價數與距離。' : ''}餐點圖片為料理示意，實際菜色與營業資訊請向店家確認。</p>
+            <p className="result-footnote">{sort === 'recommended' ? '推薦排序綜合評分、評價數與距離。' : ''}{source === 'demo' ? '示範模式圖片為料理示意。' : source === 'google' ? '照片來自 Google Maps 的店家與使用者，可能包含餐點、店內或外觀。' : '此資料來源未提供店家照片。'}實際菜色與營業資訊請向店家確認。</p>
           </div>
         </section>
         <section className="bottom-note"><span>✳</span><p>生活可以很忙，<strong>吃飯值得好好選。</strong></p><span>✳</span></section>
@@ -228,7 +228,8 @@ export default function App() {
     {(selected || picked) && <Modal title={picked ? `今天${mealName}就吃這家` : '餐廳詳細資訊'} onClose={() => { setSelected(null); setPicked(null); }} className={`restaurant-modal ${picked ? 'picked-modal' : ''}`}>
       {(() => { const r = (picked || selected)!; return <>
         {picked && <div className="pick-title"><Sparkles size={20}/><p>今天{mealName}就吃這家！</p><span>不糾結，出發吃點好的。</span></div>}
-        <div className="detail-image"><img src={r.image} alt={`${cuisineLabel(r)}料理示意`}/><span>料理示意圖片</span></div>
+        <div className="detail-image"><RestaurantPhoto key={r.id} restaurant={r}/></div>
+        <PhotoAttributions restaurant={r}/>
         <div className="detail-content"><span className="cuisine-label">{cuisineLabel(r)}</span><h2>{r.name}</h2>
           <div className="detail-facts"><span><Star size={16} fill="currentColor"/>{r.rating?.toFixed(1) ?? '尚無評分'}{r.reviewCount !== null && <small>（{r.reviewCount} 則）</small>}</span><span>{r.priceText || (r.priceLevel !== null ? priceLabels[r.priceLevel] : '價位未提供')}</span></div>
           <p><MapPin size={17}/>{r.address}</p><p><Navigation size={17}/>直線距離 {formatDistance(r.distance)}</p><p><Clock3 size={17}/>{r.openNow === true ? '目前營業中' : r.openNow === false ? '目前休息中' : '尚無即時營業資訊'}</p>
@@ -241,7 +242,7 @@ export default function App() {
         </div></>; })()}
     </Modal>}
     {info && <Modal title={info === 'help' ? '使用說明' : info === 'privacy' ? '隱私權政策' : '使用條款'} onClose={() => setInfo(null)} className="info-modal"><span className="info-icon">{info === 'help' ? <Utensils/> : <ShieldCheck/>}</span><h2>{info === 'help' ? '下一餐，交給呷啥。' : info === 'privacy' ? '你的隱私，我們在意。' : '使用條款'}</h2>
-      {info === 'help' ? <><ol><li><strong>從你的位置出發</strong><p>按「使用我的位置」並允許瀏覽器定位，也可以手動選擇地點或輸入經緯度。</p></li><li><strong>挑選今天的口味</strong><p>料理類型可複選，半徑可設定 100–5,000 公尺。調整後會自動更新搜尋結果。</p></li><li><strong>讓命運幫你上菜</strong><p>「幫我選一家」會從目前所有符合條件的結果等機率選出一家，再抽一次會避開上一家。</p></li></ol><div className="info-callout"><strong>關於餐廳資訊</strong><p>示範模式使用虛構店家。真實搜尋目前使用{provider === 'google' ? ' Google Maps，提供來源中可取得的評分、價位與營業資訊' : ' OpenStreetMap，未提供評分、價位及即時營業資訊'}。價位是相對分級，並非固定金額。午餐／晚餐切換用於抽選文案，不代表店家供餐時段；營業篩選以當下狀態為準。</p></div><button className="secondary-button" onClick={() => { switchDemo(); setInfo(null); }}>體驗示範模式</button></> : info === 'privacy' ? <><p>只有在你點選定位按鈕並授權後，我們才會讀取瀏覽器提供的位置，用來搜尋周邊餐廳。你也可以手動設定位置。</p><p>搜尋座標及條件會傳送至本站伺服器，以及當次使用的 Google Places 或 OpenStreetMap Overpass 服務。應用程式不將位置寫入資料庫。收藏僅將店家識別碼存放在你裝置的瀏覽器中。</p><p>開啟 Google Maps 導航時，出發地及目的地會傳送給 Google。你可以在瀏覽器設定撤銷定位權限或清除網站資料。</p><p>第三方服務適用 <a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer">Google 隱私權政策</a>及 <a href="https://osmfoundation.org/wiki/Privacy_Policy" target="_blank" rel="noreferrer">OpenStreetMap 隱私權政策</a>。</p></> : <><p>呷啥提供餐廳探索與隨機選擇工具。店家資料、價格、評分與營業時間可能缺漏或變更，請在出發前向店家確認。直線距離不代表實際步行路線。</p><p>示範模式的店名、評分及價位皆為虛構，圖片僅為料理示意。收藏保留在同一瀏覽器中，不跨裝置同步。</p><p>使用 Google 餐廳資料及導航時，亦適用 <a href="https://maps.google.com/help/terms_maps/" target="_blank" rel="noreferrer">Google Maps／Google Earth 附加服務條款</a>。開放地圖資料依 <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">Open Database License</a> 提供。</p></>}
+      {info === 'help' ? <><ol><li><strong>從你的位置出發</strong><p>按「使用我的位置」並允許瀏覽器定位，也可以手動選擇地點或輸入經緯度。</p></li><li><strong>挑選今天的口味</strong><p>料理類型可複選，半徑可設定 100–5,000 公尺。調整後會自動更新搜尋結果。</p></li><li><strong>讓命運幫你上菜</strong><p>「幫我選一家」會從目前所有符合條件的結果等機率選出一家，再抽一次會避開上一家。</p></li></ol><div className="info-callout"><strong>關於餐廳資訊</strong><p>示範模式使用虛構店家。真實搜尋目前使用{provider === 'google' ? ' Google Maps，提供來源中可取得的評分、價位與營業資訊' : ' OpenStreetMap，未提供評分、價位及即時營業資訊'}。真實店家照片來自 Google Maps，可能包含餐點、店內或外觀；沒有照片時會明確標示。價位是相對分級，並非固定金額。午餐／晚餐切換用於抽選文案，不代表店家供餐時段；營業篩選以當下狀態為準。</p></div><button className="secondary-button" onClick={() => { switchDemo(); setInfo(null); }}>體驗示範模式</button></> : info === 'privacy' ? <><p>只有在你點選定位按鈕並授權後，我們才會讀取瀏覽器提供的位置，用來搜尋周邊餐廳。你也可以手動設定位置。</p><p>搜尋座標及條件會傳送至本站伺服器，以及當次使用的 Google Places 或 OpenStreetMap Overpass 服務。應用程式不將位置寫入資料庫。收藏僅將店家識別碼存放在你裝置的瀏覽器中。</p><p>載入店家照片與作者頭像時，瀏覽器會連線至 Google 的圖片服務。開啟 Google Maps 導航時，出發地及目的地會傳送給 Google。你可以在瀏覽器設定撤銷定位權限或清除網站資料。</p><p>第三方服務適用 <a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer">Google 隱私權政策</a>及 <a href="https://osmfoundation.org/wiki/Privacy_Policy" target="_blank" rel="noreferrer">OpenStreetMap 隱私權政策</a>。</p></> : <><p>呷啥提供餐廳探索與隨機選擇工具。店家資料、價格、評分與營業時間可能缺漏或變更，請在出發前向店家確認。直線距離不代表實際步行路線。</p><p>示範模式的店名、評分及價位皆為虛構，示範圖片僅為料理示意。真實搜尋中的店家照片由 Google Maps 的店家或使用者提供，照片不代表目前菜單或店內狀況。收藏保留在同一瀏覽器中，不跨裝置同步。</p><p>使用 Google 餐廳資料及導航時，亦適用 <a href="https://maps.google.com/help/terms_maps/" target="_blank" rel="noreferrer">Google Maps／Google Earth 附加服務條款</a>。開放地圖資料依 <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">Open Database License</a> 提供。</p></>}
     </Modal>}
   </>;
 }

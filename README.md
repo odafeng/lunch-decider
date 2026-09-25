@@ -33,9 +33,19 @@ npm start
 3. 設定 `GOOGLE_PLACES_API_KEY=你的金鑰`，重新啟動伺服器。
 4. 建議限制此金鑰只能使用 Places API，正式部署時限制伺服器來源 IP，並設定配額。金鑰僅供後端使用；不要使用 `VITE_` 前綴，不要提交 `.env`。
 
-本程式使用特定 FieldMask，包含 `rating`、`userRatingCount`、`priceLevel`、`priceRange`、`currentOpeningHours`，會涉及相應的 Google 計費層級。未加入評論全文及餐廳照片 API。卡片使用本機料理示意圖，並明確標示；不是店家照片。
+本程式使用特定 FieldMask，包含 `rating`、`userRatingCount`、`priceLevel`、`priceRange`、`currentOpeningHours`、`photos`，會涉及相應的 Google 計費層級。尚未加入評論全文。
 
-官方文件：[Nearby Search](https://developers.google.com/maps/documentation/places/web-service/nearby-search)、[設定 Places API](https://developers.google.com/maps/documentation/places/web-service/cloud-setup)、[欄位與計費](https://developers.google.com/maps/documentation/places/web-service/data-fields)、[歸屬標示](https://developers.google.com/maps/documentation/places/web-service/policies)、[Overpass API](https://wiki.openstreetmap.org/wiki/Overpass_API)。
+### 真實店家照片
+
+Google 搜尋會取得該店家第一張可用的 Places 照片，卡片、詳細資訊及隨機抽選皆使用同一張照片。照片可能是餐點、店內或外觀，不保證只包含料理。卡片保留作者標示與原始照片連結（來源有提供時）；詳細資訊會顯示完整作者資料與頭像。
+
+- 圖片按需載入，照片讀取也會產生 Google Place Photos API 用量；僅取得目前顯示的卡片與開啟的詳細照片。
+- `/api/photos` 在後端帶入金鑰，轉址至經驗證的 Google 圖片網域；瀏覽器不會取得 API 金鑰。
+- 照片連結具有 15 分鐘的簽章有效期、每 IP 每分鐘 120 次限流，不在伺服器保存照片名稱或內容；API 回應不快取。Google 照片參照本身也可能過期，重新搜尋可更新連結。
+- Google 未提供照片或照片載入失敗時顯示清楚的佔位提示，不以料理示意圖冒充店家照片。OpenStreetMap 模式也會顯示「尚無店家照片」。
+- 示範模式仍使用明確標示的本機料理示意圖；首頁主視覺也屬裝飾照片。
+
+官方文件：[Nearby Search](https://developers.google.com/maps/documentation/places/web-service/nearby-search)、[Place Photos](https://developers.google.com/maps/documentation/places/web-service/place-photos)、[設定 Places API](https://developers.google.com/maps/documentation/places/web-service/cloud-setup)、[欄位與計費](https://developers.google.com/maps/documentation/places/web-service/data-fields)、[歸屬標示](https://developers.google.com/maps/documentation/places/web-service/policies)、[Overpass API](https://wiki.openstreetmap.org/wiki/Overpass_API)。
 
 ## 互動與資料處理
 

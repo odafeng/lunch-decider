@@ -19,5 +19,5 @@ export const DEMO_RESTAURANTS: Restaurant[] = samples.map(([name, cuisine, lat, 
   priceText: ['免費', 'NT$ 100–200', 'NT$ 200–400', 'NT$ 400–800', 'NT$ 800 以上'][priceLevel],
   distance: distanceMeters(DEMO_CENTER, { lat, lng }), address: `示範地址・中山街區 ${i + 1} 號`,
   openNow, hours: openNow ? '示範營業時間 11:00–21:00' : '示範營業時間 17:30–22:00',
-  source: 'demo', attributions: [], image: CUISINE_IMAGES[cuisine],
+  source: 'demo', attributions: [], image: CUISINE_IMAGES[cuisine], photo: null,
 }));

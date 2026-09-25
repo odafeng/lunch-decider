@@ -1,5 +1,6 @@
-import { CUISINE_IMAGES, type Cuisine, type Restaurant, type SearchInput, type SearchResponse } from '../shared/types';
+import { type Cuisine, type Restaurant, type SearchInput, type SearchResponse } from '../shared/types';
 import { distanceMeters } from '../shared/logic';
+import { createPhotoUrl, safeHttpsUrl } from './photos';
 
 export const GOOGLE_TYPES: Record<Cuisine, string[]> = {
   chinese: ['chinese_restaurant', 'taiwanese_restaurant'], japanese: ['japanese_restaurant', 'sushi_restaurant', 'ramen_restaurant'],
@@ -23,6 +24,11 @@ export interface GooglePlace {
   priceLevel?: string; priceRange?: { startPrice?: { currencyCode?: string; units?: string }; endPrice?: { currencyCode?: string; units?: string } };
   currentOpeningHours?: { openNow?: boolean; weekdayDescriptions?: string[] }; businessStatus?: string;
   attributions?: { provider?: string; providerUri?: string }[];
+  photos?: {
+    name: string;
+    authorAttributions?: { displayName?: string; uri?: string; photoUri?: string }[];
+    googleMapsUri?: string;
+  }[];
 }
 const priceLevels: Record<string, number> = { PRICE_LEVEL_FREE: 0, PRICE_LEVEL_INEXPENSIVE: 1, PRICE_LEVEL_MODERATE: 2, PRICE_LEVEL_EXPENSIVE: 3, PRICE_LEVEL_VERY_EXPENSIVE: 4 };
 export function normalizeGoogle(place: GooglePlace, input: SearchInput): Restaurant | null {
@@ -34,6 +40,8 @@ export function normalizeGoogle(place: GooglePlace, input: SearchInput): Restaur
   const prefix = currency === 'TWD' ? 'NT$' : currency;
   const start = range?.startPrice?.units;
   const end = range?.endPrice?.units;
+  const photo = place.photos?.find(photo => photo.name.startsWith(`places/${place.id}/photos/`) && createPhotoUrl(photo.name));
+  const image = photo ? createPhotoUrl(photo.name) : null;
   return {
     id: place.id, name: place.displayName?.text || '未命名餐廳', cuisines,
     address: place.formattedAddress || '尚無地址', location, distance: distanceMeters(input, location),
@@ -42,7 +50,13 @@ export function normalizeGoogle(place: GooglePlace, input: SearchInput): Restaur
     priceText: prefix && (start || end) ? `${prefix} ${start && end ? `${start}–${end}` : start ? `${start} 起` : `${end} 以下`}` : null,
     openNow: place.currentOpeningHours?.openNow ?? null,
     hours: place.currentOpeningHours?.weekdayDescriptions?.join('\n') ?? null,
-    source: 'google', image: CUISINE_IMAGES[cuisines[0]],
+    source: 'google', image,
+    photo: photo && image ? {
+      authors: (photo.authorAttributions ?? []).map(author => ({
+        name: author.displayName || '照片提供者', profileUrl: safeHttpsUrl(author.uri), avatarUrl: safeHttpsUrl(author.photoUri),
+      })),
+      sourceUrl: safeHttpsUrl(photo.googleMapsUri),
+    } : null,
     attributions: (place.attributions ?? []).map(a => ({ name: a.provider ?? '', url: a.providerUri ?? '' })),
   };
 }
@@ -53,7 +67,7 @@ export async function searchGoogle(input: SearchInput, key: string, fetcher = fe
   const includedTypes = input.cuisines.length ? [...new Set(input.cuisines.flatMap(c => GOOGLE_TYPES[c]))] : ['restaurant'];
   const response = await fetcher('https://places.googleapis.com/v1/places:searchNearby', {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': key,
-      'X-Goog-FieldMask': 'places.id,places.displayName,places.location,places.formattedAddress,places.types,places.rating,places.userRatingCount,places.priceLevel,places.priceRange,places.currentOpeningHours,places.businessStatus,places.attributions' },
+      'X-Goog-FieldMask': 'places.id,places.displayName,places.location,places.formattedAddress,places.types,places.rating,places.userRatingCount,places.priceLevel,places.priceRange,places.currentOpeningHours,places.businessStatus,places.attributions,places.photos' },
     body: JSON.stringify({ includedTypes, maxResultCount: 20, languageCode: 'zh-TW', rankPreference: 'DISTANCE',
       locationRestriction: { circle: { center: { latitude: input.lat, longitude: input.lng }, radius: input.radius } } }),
     signal: AbortSignal.timeout(15000),
@@ -79,7 +93,7 @@ export function normalizeOsm(element: OsmElement, input: SearchInput): Restauran
     id: `osm-${element.type}-${element.id}`, name: tags['name:zh'] || tags.name, cuisines, location,
     distance: distanceMeters(input, location), address: tags['addr:full'] || [tags['addr:city'], tags['addr:district'], tags['addr:street'], tags['addr:housenumber']].filter(Boolean).join('') || '地址尚未提供',
     rating: null, reviewCount: null, priceLevel: null, priceText: null, openNow: null, hours: tags.opening_hours || null,
-    source: 'osm', attributions: [], image: CUISINE_IMAGES[cuisines[0]],
+    source: 'osm', attributions: [], image: null, photo: null,
   };
 }
 export async function searchOsm(input: SearchInput, fetcher = fetch): Promise<SearchResponse> {

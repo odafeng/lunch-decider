@@ -1,6 +1,10 @@
 export type Cuisine = 'chinese' | 'japanese' | 'western' | 'thai' | 'korean' | 'vegetarian' | 'other';
 export type Source = 'demo' | 'google' | 'osm';
 export interface Coordinates { lat: number; lng: number }
+export interface RestaurantPhoto {
+  authors: { name: string; profileUrl: string | null; avatarUrl: string | null }[];
+  sourceUrl: string | null;
+}
 export interface Restaurant {
   id: string;
   name: string;
@@ -16,7 +20,8 @@ export interface Restaurant {
   hours: string | null;
   source: Source;
   attributions: { name: string; url: string }[];
-  image: string;
+  image: string | null;
+  photo: RestaurantPhoto | null;
 }
 export interface SearchInput extends Coordinates { radius: number; cuisines: Cuisine[] }
 export interface SearchResponse { source: Exclude<Source, 'demo'>; restaurants: Restaurant[]; limited: boolean }
