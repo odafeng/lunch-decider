@@ -1,7 +1,11 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 // Authorize only photos returned by a recent search, without storing photo names.
-const signingSecret = randomBytes(32);
+// Separate serverless instances must sign and verify with the same secret.
+// Derive a domain-specific fallback from the API key when no dedicated secret exists.
+const signingSecret = process.env.PHOTO_SIGNING_SECRET || (process.env.GOOGLE_PLACES_API_KEY
+  ? createHmac('sha256', process.env.GOOGLE_PLACES_API_KEY).update('chia-sha-place-photos-v1').digest()
+  : randomBytes(32));
 const PHOTO_LIFETIME_MS = 15 * 60 * 1000;
 const photoNamePattern = /^places\/[A-Za-z0-9_-]+\/photos\/[A-Za-z0-9_-]+$/;
 

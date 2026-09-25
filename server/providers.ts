@@ -1,6 +1,6 @@
-import { type Cuisine, type Restaurant, type SearchInput, type SearchResponse } from '../shared/types';
-import { distanceMeters } from '../shared/logic';
-import { createPhotoUrl, safeHttpsUrl } from './photos';
+import { type Cuisine, type Restaurant, type SearchInput, type SearchResponse } from '../shared/types.js';
+import { distanceMeters } from '../shared/logic.js';
+import { createPhotoUrl, safeHttpsUrl } from './photos.js';
 
 export const GOOGLE_TYPES: Record<Cuisine, string[]> = {
   chinese: ['chinese_restaurant', 'taiwanese_restaurant'], japanese: ['japanese_restaurant', 'sushi_restaurant', 'ramen_restaurant'],

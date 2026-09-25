@@ -20,6 +20,19 @@ npm start
 
 正式模式由同一個 Express 伺服器提供前端及 API，網址 http://127.0.0.1:3001 。外部部署請使用 HTTPS 反向代理；瀏覽器定位需要 HTTPS 或 localhost 安全環境。伺服器預設只監聽 loopback，不會自動開放到公網。
 
+## 部署至 Vercel
+
+Vercel 使用 `vercel.json`，將 Vite 產出的 `dist` 交由 CDN 提供，`api/config.ts`、`api/restaurants.ts`、`api/photos.ts` 則以 Node.js 22 Functions 執行。函式設於東京區域，逾時上限為 30 秒。
+
+1. 在 Vercel 匯入 GitHub 儲存庫，Framework Preset 使用 **Vite**，根目錄維持專案根目錄。
+2. 在 Production（如需預覽功能也設定 Preview）加入敏感環境變數 `GOOGLE_PLACES_API_KEY` 和 `PHOTO_SIGNING_SECRET`。後者使用隨機產生的 32 位元組以上密鑰；同一環境的所有函式必須使用相同值。
+3. 執行部署。也可在本機完成 `vercel login`、`vercel link` 與環境變數設定後執行 `vercel --prod`。
+4. 使用正式 HTTPS 網址驗證 `/api/config` 回傳 `google`，再測試定位、餐廳搜尋及照片。使用金鑰的伺服器來源限制時，需符合實際 Vercel 部署的出口網路設定。
+
+`.vercelignore` 排除 `.env`、本機紀錄、測試產物與相依套件；`.gitignore` 同時排除 `.vercel`。金鑰透過 Vercel 環境變數提供，不使用 `VITE_` 前綴。API 保留 `no-store`，照片簽章在不同函式實例間保持一致。未設定獨立簽章密鑰時，會從伺服器 Google 金鑰衍生專用簽章密鑰。
+
+API 的記憶體限流為每個函式實例各自計算；跨實例的全站用量上限應由 Google Cloud 配額或 Vercel Firewall 管理。
+
 ## 餐廳資料
 
 - **無金鑰：OpenStreetMap / Overpass**。可真實搜尋名稱、位置、料理類型與部分營業時間。不提供評分、價位或即時營業狀態，對應欄位明確留空，並停用相關篩選。公開 Overpass 服務可能較慢或限流；不應將它當成有服務保證的正式商業後端。

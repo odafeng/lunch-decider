@@ -2,13 +2,15 @@ import express from 'express';
 import rateLimit from 'express-rate-limit';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseSearchInput } from '../shared/logic';
-import { ProviderError, searchGoogle, searchOsm } from './providers';
-import { PhotoError, resolvePhotoUrl, verifyPhotoToken } from './photos';
+import { parseSearchInput } from '../shared/logic.js';
+import { ProviderError, searchGoogle, searchOsm } from './providers.js';
+import { PhotoError, resolvePhotoUrl, verifyPhotoToken } from './photos.js';
 
-export function createApp(fetcher = fetch) {
+export function createApp(fetcher = fetch, options: { serveStatic?: boolean; trustProxy?: number } = {}) {
   const app = express();
   app.disable('x-powered-by');
+  // Vercel overwrites X-Forwarded-For; trust its single forwarding hop only.
+  if (options.trustProxy !== undefined) app.set('trust proxy', options.trustProxy);
   app.use(express.json({ limit: '8kb' }));
   app.use('/api', (_req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -42,9 +44,11 @@ export function createApp(fetcher = fetch) {
     }
   });
   app.use('/api', (_req, res) => res.status(404).json({ error: '找不到這個服務。' }));
-  const dist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../dist');
-  app.use(express.static(dist));
-  app.get('/{*path}', (_req, res) => res.sendFile(path.join(dist, 'index.html')));
+  if (options.serveStatic !== false) {
+    const dist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../dist');
+    app.use(express.static(dist));
+    app.get('/{*path}', (_req, res) => res.sendFile(path.join(dist, 'index.html')));
+  }
   app.use((error: Error & { status?: number }, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     res.status(error.status === 413 ? 413 : 400).json({ error: '無法讀取請求，請確認資料格式。' });
   });
