@@ -1,4 +1,4 @@
-import type { Coordinates, Cuisine, Restaurant, SearchInput } from './types';
+import { CUISINES, type Coordinates, type Cuisine, type Restaurant, type SearchInput } from './types.js';
 
 export function distanceMeters(a: Coordinates, b: Coordinates): number {
   const rad = Math.PI / 180;
@@ -7,13 +7,13 @@ export function distanceMeters(a: Coordinates, b: Coordinates): number {
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
   return Math.round(6371000 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(Math.max(0, 1 - h))));
 }
-const allowedCuisines = new Set(['chinese', 'japanese', 'western', 'thai', 'korean', 'vegetarian', 'other']);
+const allowedCuisines = new Set<string>([...CUISINES.map(c => c.id), 'other']);
 export function parseSearchInput(body: unknown): SearchInput {
   if (!body || typeof body !== 'object') throw new Error('請提供搜尋條件。');
   const { lat, lng, radius, cuisines = [] } = body as Record<string, unknown>;
   if (typeof lat !== 'number' || !Number.isFinite(lat) || lat < -90 || lat > 90 || typeof lng !== 'number' || !Number.isFinite(lng) || lng < -180 || lng > 180) throw new Error('請輸入有效的經緯度。');
   if (typeof radius !== 'number' || !Number.isFinite(radius) || radius < 100 || radius > 5000) throw new Error('搜尋半徑需介於 100 至 5,000 公尺。');
-  if (!Array.isArray(cuisines) || cuisines.length > 7 || cuisines.some(c => !allowedCuisines.has(c))) throw new Error('料理類型無效。');
+  if (!Array.isArray(cuisines) || cuisines.length > allowedCuisines.size || cuisines.some(c => !allowedCuisines.has(c))) throw new Error('料理類型無效。');
   return { lat, lng, radius, cuisines: [...new Set(cuisines)] as Cuisine[] };
 }
 export interface Filters {

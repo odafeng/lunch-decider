@@ -127,6 +127,7 @@ export default function App() {
   const source = mode === 'demo' ? 'demo' : provider;
   const unavailableFilters = mode === 'live' && provider === 'osm';
   const mealName = meal === 'lunch' ? '午餐' : '晚餐';
+  const pickCuisineValue = cuisines.length > 1 ? 'multiple' : cuisines[0] ?? '';
 
   function updateRadius(value: number) { const next = Math.max(100, Math.min(5000, Math.round(value))); setRadius(next); setRadiusDraft(String(next)); }
   function toggleCuisine(cuisine: Cuisine) { setCuisines(current => current.includes(cuisine) ? current.filter(c => c !== cuisine) : [...current, cuisine]); }
@@ -207,7 +208,11 @@ export default function App() {
 
           <div className="results-area"><div className="results-heading"><div><div className="results-eyebrow">YOUR NEXT GOOD MEAL</div><h2 id="results-heading">{view === 'saved' ? '我的口袋名單' : '附近的好味道'}<span>{filtered.length} 家</span></h2></div><div className="sort-wrap"><ArrowDownUp size={14}/><select aria-label="餐廳排序" value={sort} onChange={e => setSort(e.target.value as Filters['sort'])}><option value="recommended">推薦排序</option><option value="distance">距離最近</option><option value="rating" disabled={unavailableFilters}>評分最高</option><option value="reviewCount" disabled={unavailableFilters}>評論最多</option><option value="price">價位由低到高</option></select><ChevronDown size={13}/></div></div>
 
-            <div className="decision-banner"><div className="dice-tile"><Dice5 size={29}/></div><div><h3>選擇困難？讓命運上菜。</h3><p>從符合條件的餐廳中，抽一間今天的{mealName}！</p></div><button onClick={() => setPicked(pickRestaurant(filtered))} disabled={loading || filtered.length === 0}><Sparkles size={16}/>幫我選一家<ArrowRight size={15}/></button></div>
+            <div className="decision-banner">
+              <div className="decision-intro"><div className="dice-tile"><Dice5 size={29}/></div><div><h3>選擇困難？讓命運上菜。</h3><p>先選料理，再抽一間今天的{mealName}！</p></div></div>
+              <div className="decision-controls"><div className="pick-cuisine"><label htmlFor="pick-cuisine">這次想吃</label><div className="select-wrap"><select id="pick-cuisine" value={pickCuisineValue} aria-describedby="pick-conditions" onChange={e => setCuisines(e.target.value ? [e.target.value as Cuisine] : [])}><option value="">不指定</option>{cuisines.length > 1 && <option value="multiple" disabled>依上方複選（{cuisines.length} 種）</option>}{CUISINES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</select><ChevronDown size={14}/></div></div><button className="pick-button" onClick={() => setPicked(pickRestaurant(filtered))} disabled={loading || filtered.length === 0}><Sparkles size={16}/>幫我選一家<ArrowRight size={15}/></button></div>
+              <p id="pick-conditions" className="pick-conditions">料理選擇與上方篩選同步，抽選也會套用星等、評論數等條件。{!loading && !error && <span>{filtered.length ? `目前可抽 ${filtered.length} 家。` : '目前沒有符合條件的餐廳，試試其他料理或放寬條件。'}</span>}</p>
+            </div>
 
             <div className="results-toolbar"><div className="result-tabs" aria-label="結果類別"><button onClick={() => setView('explore')} className={view === 'explore' ? 'active' : ''}>所有餐廳</button><button onClick={() => setView('saved')} className={view === 'saved' ? 'active' : ''}><Heart size={13}/>已收藏{savedInResults > 0 && <span>{savedInResults}</span>}</button></div><label className="keyword-search"><Search size={15}/><input type="search" placeholder="搜尋餐廳名稱" aria-label="搜尋目前結果中的餐廳" value={query} onChange={e => setQuery(e.target.value)}/></label><button className="mobile-filter-toggle" onClick={() => setMobileFilters(v => !v)} aria-expanded={mobileFilters}><Settings2 size={17}/>{activeFilters || '篩選'}</button></div>
 

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { distanceMeters, filterRestaurants, parseSearchInput, pickRestaurant, directionsUrl, type Filters } from '../shared/logic';
 import { DEMO_RESTAURANTS } from '../src/demo';
-import { normalizeGoogle, normalizeOsm, searchGoogle, searchOsm } from '../server/providers';
+import { classifyCuisine, normalizeGoogle, normalizeOsm, searchGoogle, searchOsm } from '../server/providers';
 import { createApp } from '../server/app';
 
 const input = { lat: 25.0524, lng: 121.5206, radius: 1000, cuisines: [] };
@@ -17,6 +17,20 @@ test('search rejects invalid coordinates, radius and injectable cuisine values',
   for (const body of [null, {}, { ...input, lat: NaN }, { ...input, lat: 91 }, { ...input, lng: -181 }, { ...input, radius: 99 }, { ...input, radius: 5001 }, { ...input, lat: '25' }, { ...input, cuisines: ['bad";out;'] }]) assert.throws(() => parseSearchInput(body));
   assert.deepEqual(parseSearchInput({ ...input, cuisines: ['thai', 'thai'] }).cuisines, ['thai']);
   assert.equal(parseSearchInput({ ...input, lat: 0, lng: 0 }).lat, 0);
+  const allCuisines = ['taiwanese', 'chinese', 'hongkong', 'thai', 'japanese', 'western', 'korean', 'vegetarian', 'other'];
+  assert.deepEqual(parseSearchInput({ ...input, cuisines: allCuisines }).cuisines, allCuisines);
+  assert.throws(() => parseSearchInput({ ...input, cuisines: [...allCuisines, 'thai'] }));
+});
+
+test('regional cuisine tags keep Taiwanese, Chinese and Hong Kong selections distinct', () => {
+  assert.deepEqual(classifyCuisine(['taiwanese_restaurant', 'chinese_restaurant', 'restaurant']), ['taiwanese']);
+  assert.deepEqual(classifyCuisine(['cantonese_restaurant', 'dim_sum_restaurant', 'chinese_restaurant']), ['hongkong']);
+  assert.deepEqual(classifyCuisine(['chinese_noodle_restaurant', 'chinese_restaurant']), ['chinese']);
+  assert.deepEqual(classifyCuisine([], ' Taiwanese ; Chinese ; vegetarian '), ['taiwanese', 'vegetarian']);
+  assert.deepEqual(classifyCuisine([], 'Hong Kong;dim_sum;chinese'), ['hongkong']);
+  assert.deepEqual(classifyCuisine([], 'sichuan'), ['chinese']);
+  assert.deepEqual(classifyCuisine(['japanese_restaurant', 'noodle_shop']), ['japanese']);
+  assert.deepEqual(classifyCuisine(['restaurant']), ['other']);
 });
 test('radius and cuisine, rating, budget and opening filters combine correctly', () => {
   const result = filterRestaurants(DEMO_RESTAURANTS, { ...filters, cuisines: ['japanese', 'western'], minRating: 4.5, prices: [2], openOnly: true });
@@ -88,6 +102,38 @@ test('Google query sends server-side radius and OR cuisine filters and drops out
 });
 test('Google provider errors are actionable and never leak upstream error details or keys', async () => {
   await assert.rejects(searchGoogle(input, 'secret', (async () => new Response('secret upstream information', { status: 403 })) as typeof fetch), /請檢查伺服器的金鑰/);
+});
+
+test('Google searches Taiwanese and Hong Kong types, supports OR, and excludes broad parent matches', async () => {
+  const places = [
+    { id: 'tw', types: ['taiwanese_restaurant', 'chinese_restaurant'], location: { latitude: input.lat, longitude: input.lng } },
+    { id: 'hk', types: ['dim_sum_restaurant', 'cantonese_restaurant', 'chinese_restaurant'], location: { latitude: input.lat, longitude: input.lng } },
+    { id: 'cn', types: ['chinese_restaurant'], location: { latitude: input.lat, longitude: input.lng } },
+  ];
+  let includedTypes: string[] = [];
+  const fetcher = (async (_url, options) => {
+    includedTypes = JSON.parse(options?.body as string).includedTypes;
+    return Response.json({ places });
+  }) as typeof fetch;
+  const regional = await searchGoogle({ ...input, cuisines: ['taiwanese', 'hongkong'] }, 'test-key', fetcher);
+  assert.deepEqual(includedTypes, ['taiwanese_restaurant', 'cantonese_restaurant', 'dim_sum_restaurant']);
+  assert.deepEqual(regional.restaurants.map(r => r.id), ['tw', 'hk']);
+  const chinese = await searchGoogle({ ...input, cuisines: ['chinese'] }, 'test-key', fetcher);
+  assert.equal(includedTypes.includes('taiwanese_restaurant'), false);
+  assert.deepEqual(chinese.restaurants.map(r => r.id), ['cn']);
+  const unrestricted = await searchGoogle(input, 'test-key', fetcher);
+  assert.deepEqual(includedTypes, ['restaurant']);
+  assert.equal(unrestricted.restaurants.length, 3);
+});
+
+test('OSM preserves regional cuisine choices and unrestricted search includes every cuisine', async () => {
+  const elements = ['taiwanese', 'chinese', 'cantonese'].map((cuisine, id) => ({
+    type: 'node', id, lat: input.lat, lon: input.lng, tags: { name: `餐廳 ${id}`, cuisine },
+  }));
+  const fetcher = (async () => Response.json({ elements })) as typeof fetch;
+  const regional = await searchOsm({ ...input, cuisines: ['taiwanese', 'hongkong'] }, fetcher);
+  assert.deepEqual(regional.restaurants.map(r => r.cuisines), [['taiwanese'], ['hongkong']]);
+  assert.equal((await searchOsm(input, fetcher)).restaurants.length, 3);
 });
 test('OSM uses way centers, never fabricates rating or price, and deduplicates a mapped venue', async () => {
   const element = { type: 'way', id: 1, center: { lat: input.lat, lon: input.lng }, tags: { name: '泰式小館', cuisine: 'thai', opening_hours: 'Mo-Su 11:00-21:00' } };

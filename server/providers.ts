@@ -3,19 +3,25 @@ import { distanceMeters } from '../shared/logic.js';
 import { createPhotoUrl, safeHttpsUrl } from './photos.js';
 
 export const GOOGLE_TYPES: Record<Cuisine, string[]> = {
-  chinese: ['chinese_restaurant', 'taiwanese_restaurant'], japanese: ['japanese_restaurant', 'sushi_restaurant', 'ramen_restaurant'],
+  taiwanese: ['taiwanese_restaurant'],
+  chinese: ['chinese_restaurant', 'chinese_noodle_restaurant', 'dumpling_restaurant', 'hot_pot_restaurant'],
+  hongkong: ['cantonese_restaurant', 'dim_sum_restaurant'],
+  japanese: ['japanese_restaurant', 'sushi_restaurant', 'ramen_restaurant'],
   western: ['western_restaurant', 'italian_restaurant', 'french_restaurant', 'american_restaurant', 'steak_house', 'pizza_restaurant'],
   thai: ['thai_restaurant'], korean: ['korean_restaurant'], vegetarian: ['vegetarian_restaurant', 'vegan_restaurant'], other: ['restaurant'],
 };
 export function classifyCuisine(types: string[], osmCuisine = ''): Cuisine[] {
-  const text = [...types, ...osmCuisine.split(';')];
+  const text = [...types, ...osmCuisine.split(';')].map(value => value.trim().toLowerCase().replace(/[ -]+/g, '_'));
   const result: Cuisine[] = [];
   const rules: [Cuisine, RegExp][] = [
-    ['chinese', /chinese|taiwanese|dumpling|noodle|hot_pot/], ['japanese', /japanese|sushi|ramen|udon|tonkatsu|yakiniku|yakitori/],
+    ['taiwanese', /taiwanese/], ['hongkong', /cantonese|dim_sum|hong_kong|hongkong|yum_cha/],
+    ['chinese', /chinese|sichuan|szechuan|hunan|shanghainese|dumpling|hot_pot/], ['japanese', /japanese|sushi|ramen|udon|tonkatsu|yakiniku|yakitori/],
     ['western', /western|italian|french|american|steak|pizza|burger|pasta|mediterranean/], ['thai', /thai/],
     ['korean', /korean/], ['vegetarian', /vegetarian|vegan/],
   ];
   for (const [cuisine, re] of rules) if (text.some(t => re.test(t))) result.push(cuisine);
+  // Prefer a specific regional cuisine over Google's broader Chinese parent type.
+  if (result.includes('taiwanese') || result.includes('hongkong')) return result.filter(c => c !== 'chinese');
   return result.length ? result : ['other'];
 }
 export interface GooglePlace {
@@ -78,7 +84,8 @@ export async function searchGoogle(input: SearchInput, key: string, fetcher = fe
     throw new ProviderError('Google 餐廳搜尋暫時無法使用，請稍後再試。');
   }
   const data = await response.json() as { places?: GooglePlace[] };
-  const restaurants = (data.places ?? []).map(p => normalizeGoogle(p, input)).filter((r): r is Restaurant => r !== null && r.distance <= input.radius);
+  const restaurants = (data.places ?? []).map(p => normalizeGoogle(p, input))
+    .filter((r): r is Restaurant => r !== null && r.distance <= input.radius && (!input.cuisines.length || r.cuisines.some(c => input.cuisines.includes(c))));
   return { source: 'google', restaurants, limited: (data.places?.length ?? 0) === 20 };
 }
 export interface OsmElement { type: string; id: number; lat?: number; lon?: number; center?: { lat: number; lon: number }; tags?: Record<string, string> }
