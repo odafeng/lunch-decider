@@ -6,7 +6,7 @@ import { normalizeGoogle, normalizeOsm, searchGoogle, searchOsm } from '../serve
 import { createApp } from '../server/app';
 
 const input = { lat: 25.0524, lng: 121.5206, radius: 1000, cuisines: [] };
-const filters: Filters = { radius: 1000, cuisines: [], minRating: 0, prices: [], openOnly: false, query: '', sort: 'distance' };
+const filters: Filters = { radius: 1000, cuisines: [], minRating: 0, minReviewCount: 0, prices: [], openOnly: false, query: '', sort: 'distance' };
 
 test('distance is computed geographically, including across the date line', () => {
   assert.equal(distanceMeters(input, input), 0);
@@ -24,10 +24,39 @@ test('radius and cuisine, rating, budget and opening filters combine correctly',
   assert.equal(filterRestaurants(DEMO_RESTAURANTS, { ...filters, radius: 100 }).length, 0);
   assert.equal(filterRestaurants(DEMO_RESTAURANTS, { ...filters, query: '  PASTA ' })[0].id, 'demo-2');
 });
-test('unknown values never pass known rating, price or open filters', () => {
-  const unknown = { ...DEMO_RESTAURANTS[0], rating: null, priceLevel: null, openNow: null };
+test('unknown values never pass known rating, review count, price or open filters', () => {
+  const unknown = { ...DEMO_RESTAURANTS[0], rating: null, reviewCount: null, priceLevel: null, openNow: null };
   assert.equal(filterRestaurants([unknown], filters).length, 1);
-  for (const extra of [{ minRating: 4 }, { prices: [1] }, { openOnly: true }]) assert.equal(filterRestaurants([unknown], { ...filters, ...extra }).length, 0);
+  for (const extra of [{ minRating: 4 }, { minReviewCount: 100 }, { prices: [1] }, { openOnly: true }]) assert.equal(filterRestaurants([unknown], { ...filters, ...extra }).length, 0);
+});
+
+test('rating and review minimums are inclusive, independent, and constrain random picks together', () => {
+  const restaurants = [
+    { ...DEMO_RESTAURANTS[0], id: 'boundary', rating: 4.5, reviewCount: 300 },
+    { ...DEMO_RESTAURANTS[0], id: 'few-reviews', rating: 4.9, reviewCount: 299 },
+    { ...DEMO_RESTAURANTS[0], id: 'low-rating', rating: 4.4, reviewCount: 1000 },
+    { ...DEMO_RESTAURANTS[0], id: 'no-reviews', rating: 5, reviewCount: 0 },
+  ];
+  assert.equal(filterRestaurants(restaurants, filters).length, 4);
+  assert.deepEqual(filterRestaurants(restaurants, { ...filters, minReviewCount: 300 }).map(r => r.id), ['boundary', 'low-rating']);
+  const eligible = filterRestaurants(restaurants, { ...filters, minRating: 4.5, minReviewCount: 300 });
+  assert.deepEqual(eligible.map(r => r.id), ['boundary']);
+  assert.equal(pickRestaurant(eligible)?.id, 'boundary');
+  assert.deepEqual(filterRestaurants(restaurants, { ...filters, minReviewCount: 1001 }), []);
+});
+
+test('review sorting uses rating then distance for ties and keeps unknown counts last', () => {
+  const restaurants = [
+    { ...DEMO_RESTAURANTS[0], id: 'unknown', reviewCount: null, rating: 5 },
+    { ...DEMO_RESTAURANTS[0], id: 'zero', reviewCount: 0, rating: 5 },
+    { ...DEMO_RESTAURANTS[0], id: 'lower-rating', reviewCount: 500, rating: 4.5 },
+    { ...DEMO_RESTAURANTS[0], id: 'farther', reviewCount: 500, rating: 4.8, distance: 300 },
+    { ...DEMO_RESTAURANTS[0], id: 'nearer', reviewCount: 500, rating: 4.8, distance: 100 },
+    { ...DEMO_RESTAURANTS[0], id: 'most-reviewed', reviewCount: 1000, rating: 4 },
+  ];
+  const originalOrder = restaurants.map(r => r.id);
+  assert.deepEqual(filterRestaurants(restaurants, { ...filters, sort: 'reviewCount' }).map(r => r.id), ['most-reviewed', 'nearer', 'farther', 'lower-rating', 'zero', 'unknown']);
+  assert.deepEqual(restaurants.map(r => r.id), originalOrder);
 });
 test('random pick handles empty sets, singles, and avoids the previous selection', () => {
   assert.equal(pickRestaurant([]), null);

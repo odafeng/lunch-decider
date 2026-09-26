@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowDownUp, ArrowRight, ArrowUpRight, Check, ChevronDown, Clock3, Compass, Dice5, Heart, Leaf, LoaderCircle, LocateFixed, MapPin, Moon, Navigation, Search, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, Star, Sun, Utensils, X } from 'lucide-react';
+import { ArrowDownUp, ArrowRight, ArrowUpRight, Check, ChevronDown, Clock3, Compass, Dice5, Heart, Leaf, LoaderCircle, LocateFixed, MapPin, MessageSquare, Moon, Navigation, Search, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, Star, Sun, Utensils, X } from 'lucide-react';
 import { CUISINES, type Coordinates, type Cuisine, type Restaurant, type SearchResponse } from '../shared/types';
 import { directionsUrl, filterRestaurants, formatDistance, pickRestaurant, type Filters } from '../shared/logic';
 import { DEMO_CENTER, DEMO_RESTAURANTS } from './demo';
@@ -58,6 +58,7 @@ export default function App() {
   const [radiusDraft, setRadiusDraft] = useState('1000');
   const [cuisines, setCuisines] = useState<Cuisine[]>([]);
   const [minRating, setMinRating] = useState(0);
+  const [minReviewCount, setMinReviewCount] = useState(0);
   const [prices, setPrices] = useState<number[]>([]);
   const [openOnly, setOpenOnly] = useState(false);
   const [sort, setSort] = useState<Filters['sort']>('recommended');
@@ -110,20 +111,26 @@ export default function App() {
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [mode, origin, radius, cuisinesKey, refresh]);
 
-  useEffect(() => { setVisibleCount(6); setPicked(null); }, [radius, cuisinesKey, minRating, prices, openOnly, query, view, sort, mode, origin]);
+  useEffect(() => { setVisibleCount(6); setPicked(null); }, [radius, cuisinesKey, minRating, minReviewCount, prices, openOnly, query, view, sort, mode, origin]);
+  useEffect(() => {
+    if (mode === 'live' && provider === 'osm') {
+      setMinRating(0); setMinReviewCount(0); setPrices([]); setOpenOnly(false);
+      setSort(current => current === 'rating' || current === 'reviewCount' ? 'recommended' : current);
+    }
+  }, [mode, provider]);
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(''), 3000); return () => clearTimeout(timer); }, [toast]);
 
-  const filtered = useMemo(() => filterRestaurants(restaurants, { radius, cuisines, minRating, prices, openOnly, query, sort })
-    .filter(r => view !== 'saved' || favorites.includes(r.id)), [restaurants, radius, cuisinesKey, minRating, prices, openOnly, query, sort, view, favorites]);
+  const filtered = useMemo(() => filterRestaurants(restaurants, { radius, cuisines, minRating, minReviewCount, prices, openOnly, query, sort })
+    .filter(r => view !== 'saved' || favorites.includes(r.id)), [restaurants, radius, cuisinesKey, minRating, minReviewCount, prices, openOnly, query, sort, view, favorites]);
   const savedInResults = restaurants.filter(r => favorites.includes(r.id)).length;
-  const activeFilters = cuisines.length + prices.length + Number(!!minRating) + Number(openOnly);
+  const activeFilters = cuisines.length + prices.length + Number(!!minRating) + Number(!!minReviewCount) + Number(openOnly);
   const source = mode === 'demo' ? 'demo' : provider;
   const unavailableFilters = mode === 'live' && provider === 'osm';
   const mealName = meal === 'lunch' ? '午餐' : '晚餐';
 
   function updateRadius(value: number) { const next = Math.max(100, Math.min(5000, Math.round(value))); setRadius(next); setRadiusDraft(String(next)); }
   function toggleCuisine(cuisine: Cuisine) { setCuisines(current => current.includes(cuisine) ? current.filter(c => c !== cuisine) : [...current, cuisine]); }
-  function resetFilters() { setCuisines([]); setMinRating(0); setPrices([]); setOpenOnly(false); setQuery(''); updateRadius(1000); }
+  function resetFilters() { setCuisines([]); setMinRating(0); setMinReviewCount(0); setPrices([]); setOpenOnly(false); setQuery(''); updateRadius(1000); }
   function toggleFavorite(r: Restaurant) {
     const removing = favorites.includes(r.id);
     const next = removing ? favorites.filter(id => id !== r.id) : [...favorites, r.id].slice(-500);
@@ -134,7 +141,6 @@ export default function App() {
   function useLocation(coordinates: Coordinates, label: string) {
     setOrigin(coordinates); setLocationLabel(label); setMode('live'); setLocationError(''); setShowLocation(false);
     setSelected(null); setPicked(null); setView('explore');
-    if (provider === 'osm') { setMinRating(0); setPrices([]); setOpenOnly(false); }
   }
   function locate() {
     if (!navigator.geolocation) { setLocationError('這個瀏覽器不支援定位，請改用「更換位置」手動選擇。'); return; }
@@ -191,14 +197,15 @@ export default function App() {
             <div className="filter-body">
               <div className="filter-group"><label className="filter-label" htmlFor="radius"><MapPin size={15}/>搜尋範圍<span className="range-value">{formatDistance(radius)}</span></label><input id="radius" className="radius-slider" type="range" min="100" max="5000" step="100" value={radius} style={{ '--range': `${(radius - 100) / 4900 * 100}%` } as React.CSSProperties} onChange={e => updateRadius(Number(e.target.value))}/><div className="range-labels"><span>100 公尺</span><span>5 公里</span></div><div className="radius-input"><input aria-label="搜尋半徑公尺數" type="number" min="100" max="5000" value={radiusDraft} onChange={e => setRadiusDraft(e.target.value)} onBlur={() => updateRadius(Number(radiusDraft) || 100)} onKeyDown={e => { if (e.key === 'Enter') { updateRadius(Number(radiusDraft) || 100); e.currentTarget.blur(); } }}/><span>公尺以內</span></div><p className="filter-hint">以搜尋位置為中心的直線距離</p></div>
               <div className={`filter-group ${unavailableFilters ? 'unavailable' : ''}`}><span className="filter-label"><span className="dollar-icon">$</span>用餐預算</span><div className="price-options">{[1, 2, 3, 4].map(price => <button key={price} disabled={unavailableFilters} className={prices.includes(price) ? 'active' : ''} aria-pressed={prices.includes(price)} aria-label={`價位 ${priceLabels[price]}`} onClick={() => setPrices(current => current.includes(price) ? current.filter(p => p !== price) : [...current, price])}>{priceLabels[price]}</button>)}</div><div className="range-labels"><span>輕鬆吃</span><span>吃好一點</span></div></div>
-              <div className={`filter-group ${unavailableFilters ? 'unavailable' : ''}`}><label className="filter-label" htmlFor="rating"><Star size={15}/>餐廳評分</label><div className="select-wrap"><select id="rating" value={minRating} disabled={unavailableFilters} onChange={e => setMinRating(Number(e.target.value))}><option value="0">不限評分</option><option value="3.5">3.5 星以上</option><option value="4">4.0 星以上</option><option value="4.5">4.5 星以上</option></select><ChevronDown size={14}/></div></div>
+              <div className={`filter-group ${unavailableFilters ? 'unavailable' : ''}`}><label className="filter-label" htmlFor="rating"><Star size={15}/>餐廳評分</label><div className="select-wrap"><select id="rating" value={minRating} disabled={unavailableFilters} onChange={e => setMinRating(Number(e.target.value))}><option value="0">不限評分</option><option value="3.5">3.5 星以上</option><option value="4">4.0 星以上</option><option value="4.2">4.2 星以上</option><option value="4.5">4.5 星以上</option><option value="4.8">4.8 星以上</option></select><ChevronDown size={14}/></div></div>
+              <div className={`filter-group review-count-filter ${unavailableFilters ? 'unavailable' : ''}`}><label className="filter-label" htmlFor="review-count"><MessageSquare size={15}/>最低評論數</label><div className="select-wrap"><select id="review-count" value={minReviewCount} disabled={unavailableFilters} onChange={e => setMinReviewCount(Number(e.target.value))}><option value="0">不限評論數</option>{[50, 100, 300, 500, 1000].map(count => <option key={count} value={count}>{count.toLocaleString()} 則以上</option>)}</select><ChevronDown size={14}/></div><p className="filter-hint">同時符合星等與評論數，才會列入抽選</p></div>
               <div className={`open-filter ${unavailableFilters ? 'unavailable' : ''}`}><label htmlFor="open-now"><Clock3 size={15}/>只看現在營業</label><button id="open-now" className={`toggle ${openOnly ? 'on' : ''}`} role="switch" aria-checked={openOnly} aria-label="只看現在營業" disabled={unavailableFilters} onClick={() => setOpenOnly(v => !v)}><span/></button></div>
-              {unavailableFilters && <p className="availability-note">開放地圖未提供評分、價位及即時營業狀態，因此暫不開放這些篩選。</p>}
+              {unavailableFilters && <p className="availability-note">開放地圖未提供評分、評論數、價位及即時營業狀態，因此暫不開放這些篩選。</p>}
               <div className="filter-tip"><span>💡</span><p>偶爾跳脫習慣，<br/>下一家愛店也許就在轉角。</p></div>
             </div>
           </aside>
 
-          <div className="results-area"><div className="results-heading"><div><div className="results-eyebrow">YOUR NEXT GOOD MEAL</div><h2 id="results-heading">{view === 'saved' ? '我的口袋名單' : '附近的好味道'}<span>{filtered.length} 家</span></h2></div><div className="sort-wrap"><ArrowDownUp size={14}/><select aria-label="餐廳排序" value={sort} onChange={e => setSort(e.target.value as Filters['sort'])}><option value="recommended">推薦排序</option><option value="distance">距離最近</option><option value="rating">評分最高</option><option value="price">價位由低到高</option></select><ChevronDown size={13}/></div></div>
+          <div className="results-area"><div className="results-heading"><div><div className="results-eyebrow">YOUR NEXT GOOD MEAL</div><h2 id="results-heading">{view === 'saved' ? '我的口袋名單' : '附近的好味道'}<span>{filtered.length} 家</span></h2></div><div className="sort-wrap"><ArrowDownUp size={14}/><select aria-label="餐廳排序" value={sort} onChange={e => setSort(e.target.value as Filters['sort'])}><option value="recommended">推薦排序</option><option value="distance">距離最近</option><option value="rating" disabled={unavailableFilters}>評分最高</option><option value="reviewCount" disabled={unavailableFilters}>評論最多</option><option value="price">價位由低到高</option></select><ChevronDown size={13}/></div></div>
 
             <div className="decision-banner"><div className="dice-tile"><Dice5 size={29}/></div><div><h3>選擇困難？讓命運上菜。</h3><p>從符合條件的餐廳中，抽一間今天的{mealName}！</p></div><button onClick={() => setPicked(pickRestaurant(filtered))} disabled={loading || filtered.length === 0}><Sparkles size={16}/>幫我選一家<ArrowRight size={15}/></button></div>
 
@@ -208,7 +215,7 @@ export default function App() {
               {source === 'demo' ? <><span className="source-dot"/><span>示範餐廳與評價，非真實店家。<button onClick={locate} disabled={locating}>開啟定位，探索真實美食<ArrowUpRight size={12}/></button></span></> : source === 'google' ? <><span className="google-attribution" translate="no">Google Maps</span><span>提供餐廳資料・距離為直線估算</span></> : <><Leaf size={14}/><span>餐廳資料 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> 貢獻者・未提供評分與價位</span></>}
             </div>
             {view === 'saved' && <p className="saved-note">顯示這次搜尋範圍內的收藏。收藏記號會保留在這台裝置。</p>}
-            {cuisines.length > 0 && <div className="active-cuisines">{cuisines.map(c => <button key={c} onClick={() => toggleCuisine(c)}>{CUISINES.find(item => item.id === c)?.label}<X size={12}/></button>)}</div>}
+            {(cuisines.length > 0 || minRating > 0 || minReviewCount > 0) && <div className="active-cuisines">{cuisines.map(c => <button key={c} onClick={() => toggleCuisine(c)}>{CUISINES.find(item => item.id === c)?.label}<X size={12}/></button>)}{minRating > 0 && <button aria-label="移除星等篩選" onClick={() => setMinRating(0)}><Star size={12}/>{minRating.toFixed(1)} 星以上<X size={12}/></button>}{minReviewCount > 0 && <button aria-label="移除評論數篩選" onClick={() => setMinReviewCount(0)}><MessageSquare size={12}/>{minReviewCount.toLocaleString()} 則以上<X size={12}/></button>}</div>}
             <div aria-live="polite" aria-busy={loading}>
               {loading ? <><div className="loading-caption"><LoaderCircle className="spin" size={16}/>正在尋找附近的好味道…</div><div className="restaurant-grid">{Array.from({ length: 6 }, (_, i) => <div className="skeleton-card" key={i}><div/><span/><span/><span/></div>)}</div></> : error ? <div className="empty-state"><Compass size={36}/><h3>這次搜尋沒有順利送達</h3><p>{error}</p><div><button className="primary-button" onClick={() => setRefresh(v => v + 1)}>再試一次</button><button className="secondary-button" onClick={switchDemo}>先看看示範</button></div></div> : filtered.length ? <div className="restaurant-grid">{filtered.slice(0, visibleCount).map(r => <RestaurantCard key={r.id} restaurant={r} saved={favorites.includes(r.id)} onSave={() => toggleFavorite(r)} onDetails={() => setSelected(r)}/>)}</div> : <div className="empty-state"><span className="empty-emoji">{view === 'saved' ? '🤍' : '🍽️'}</span><h3>{view === 'saved' ? '這裡還沒有你的口袋名單' : '這個範圍還沒找到合適的餐廳'}</h3><p>{view === 'saved' ? '點一下餐廳上的愛心，留給下一次的好好吃飯。' : '試試放寬篩選條件、擴大搜尋範圍，或換個位置。'}</p><button className="secondary-button" onClick={() => { resetFilters(); setView('explore'); }}>{view === 'saved' ? '探索附近餐廳' : '重設篩選條件'}</button></div>}
             </div>

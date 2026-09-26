@@ -44,6 +44,34 @@ test('favorites persist across reloads and random choice honors filters', async 
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
+test('rating and review thresholds narrow the picker, sort results, and reset together', async ({ page }) => {
+  await page.goto('/');
+  await page.getByLabel('餐廳評分', { exact: true }).selectOption('4.8');
+  await page.getByLabel('最低評論數', { exact: true }).selectOption('500');
+  await expect(page.locator('.restaurant-card')).toHaveCount(1);
+  await expect(page.locator('.restaurant-card')).toContainText('森川');
+  await page.getByRole('button', { name: '幫我選一家', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText('森川');
+  await expect(page.getByRole('button', { name: '符合條件的餐廳只有這一家' })).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: '移除星等篩選', exact: true }).click();
+  await expect(page.getByLabel('最低評論數', { exact: true })).toHaveValue('500');
+  await page.getByLabel('餐廳排序').selectOption('reviewCount');
+  const counts = await page.locator('.restaurant-card .review-count').allTextContents();
+  const reviewCounts = counts.map(text => Number(text.replace(/\D/g, '')));
+  expect(reviewCounts.length).toBeGreaterThan(1);
+  expect(reviewCounts).toEqual([...reviewCounts].sort((a, b) => b - a));
+  await page.getByRole('button', { name: '移除評論數篩選', exact: true }).click();
+  await expect(page.getByLabel('最低評論數', { exact: true })).toHaveValue('0');
+  await page.getByLabel('餐廳評分', { exact: true }).selectOption('4.8');
+  await page.getByLabel('最低評論數', { exact: true }).selectOption('1000');
+  await expect(page.getByRole('button', { name: '幫我選一家', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: '重設篩選條件', exact: true }).click();
+  await expect(page.getByLabel('餐廳評分', { exact: true })).toHaveValue('0');
+  await expect(page.getByLabel('最低評論數', { exact: true })).toHaveValue('0');
+  await expect(page.locator('.restaurant-card')).toHaveCount(6);
+});
+
 test('random redraw avoids immediate repeats and dinner copy works', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: '晚餐提案' }).click();
@@ -90,10 +118,18 @@ test('OSM mode disables unsupported filters and service failure is not silently 
   await page.route('**/api/config', route => route.fulfill({ json: { provider: 'osm' } }));
   await page.route('**/api/restaurants', route => route.fulfill({ status: 503, json: { error: '開放地圖目前忙碌中' } }));
   await page.goto('/');
+  await page.getByLabel('餐廳評分', { exact: true }).selectOption('4.8');
+  await page.getByLabel('最低評論數', { exact: true }).selectOption('500');
+  await page.getByLabel('餐廳排序').selectOption('reviewCount');
   await page.getByRole('button', { name: '更換位置' }).click();
   await page.getByRole('button', { name: '台北・中山站', exact: true }).click();
   await expect(page.getByText('開放地圖目前忙碌中', { exact: true })).toBeVisible();
   await expect(page.getByRole('switch')).toBeDisabled();
+  await expect(page.getByLabel('餐廳評分', { exact: true })).toBeDisabled();
+  await expect(page.getByLabel('餐廳評分', { exact: true })).toHaveValue('0');
+  await expect(page.getByLabel('最低評論數', { exact: true })).toBeDisabled();
+  await expect(page.getByLabel('最低評論數', { exact: true })).toHaveValue('0');
+  await expect(page.getByLabel('餐廳排序')).toHaveValue('recommended');
   await expect(page.locator('.restaurant-card')).toHaveCount(0);
   await page.getByRole('button', { name: '先看看示範' }).click();
   await expect(page.locator('.restaurant-card')).toHaveCount(6);
@@ -126,6 +162,11 @@ test('mobile: no horizontal overflow, filters are accessible, and details close 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole('button', { name: '篩選', exact: true }).click();
   await expect(page.getByLabel('搜尋半徑公尺數')).toBeVisible();
+  await page.getByLabel('餐廳評分', { exact: true }).selectOption('4.8');
+  await page.getByLabel('最低評論數', { exact: true }).selectOption('500');
+  await expect(page.locator('.mobile-filter-toggle')).toHaveText('2');
+  await expect(page.locator('.restaurant-card')).toHaveCount(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByLabel('搜尋半徑公尺數').fill('2000');
   await page.getByLabel('搜尋半徑公尺數').press('Tab');
   await page.getByRole('button', { name: /查看 .* 詳細資訊/ }).first().click();

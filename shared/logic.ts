@@ -17,19 +17,21 @@ export function parseSearchInput(body: unknown): SearchInput {
   return { lat, lng, radius, cuisines: [...new Set(cuisines)] as Cuisine[] };
 }
 export interface Filters {
-  radius: number; cuisines: Cuisine[]; minRating: number; prices: number[]; openOnly: boolean; query: string;
-  sort: 'recommended' | 'distance' | 'rating' | 'price';
+  radius: number; cuisines: Cuisine[]; minRating: number; minReviewCount: number; prices: number[]; openOnly: boolean; query: string;
+  sort: 'recommended' | 'distance' | 'rating' | 'reviewCount' | 'price';
 }
 export function filterRestaurants(restaurants: Restaurant[], filters: Filters): Restaurant[] {
   const result = restaurants.filter(r => r.distance <= filters.radius &&
     (!filters.cuisines.length || r.cuisines.some(c => filters.cuisines.includes(c))) &&
     (!filters.minRating || (r.rating !== null && r.rating >= filters.minRating)) &&
+    (!filters.minReviewCount || (r.reviewCount !== null && r.reviewCount >= filters.minReviewCount)) &&
     (!filters.prices.length || (r.priceLevel !== null && filters.prices.includes(r.priceLevel))) &&
     (!filters.openOnly || r.openNow === true) &&
     (!filters.query.trim() || `${r.name} ${r.address}`.toLocaleLowerCase().includes(filters.query.trim().toLocaleLowerCase())));
   return result.sort((a, b) => {
     if (filters.sort === 'distance') return a.distance - b.distance;
     if (filters.sort === 'rating') return (b.rating ?? -1) - (a.rating ?? -1) || (b.reviewCount ?? 0) - (a.reviewCount ?? 0);
+    if (filters.sort === 'reviewCount') return (b.reviewCount ?? -1) - (a.reviewCount ?? -1) || (b.rating ?? -1) - (a.rating ?? -1) || a.distance - b.distance;
     if (filters.sort === 'price') return (a.priceLevel ?? Infinity) - (b.priceLevel ?? Infinity) || a.distance - b.distance;
     const score = (r: Restaurant) => (r.rating ?? 0) * 10 + Math.log10((r.reviewCount ?? 0) + 1) - r.distance / 1500;
     return score(b) - score(a);
