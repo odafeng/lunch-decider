@@ -48,3 +48,19 @@
 .pick-conditions>span{display:block}
 @media(max-width:1150px){.decision-banner{grid-template-columns:1fr}.decision-controls{display:grid;grid-template-columns:minmax(0,1fr) auto}.pick-cuisine select{width:100%}}
 @media(max-width:700px){.cuisine-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.decision-banner{padding:16px;gap:14px}.decision-intro h3{font-size:13px}.decision-intro p{font-size:11px;max-width:none}.pick-cuisine select{font-size:16px}.decision-controls>.pick-button{min-height:45px}.decision-controls>.pick-button>svg:last-child{display:none}}
+
+body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+.site-header{height:auto;min-height:90px;padding-top:env(safe-area-inset-top)}
+.header-inner{min-height:90px;gap:18px}
+.header-inner nav{margin-left:0}
+.header-actions{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.install-button{display:flex;align-items:center;justify-content:center;gap:6px;min-height:38px;border:1px solid #dce4cf;border-radius:8px;background:#edf2e4;color:#566e42;padding:9px 12px;font-size:12px;font-weight:500;white-space:nowrap}
+.install-button:hover{background:#e2ebd5}
+.offline-banner{padding:12px 20px;background:#fff1dd;border-bottom:1px solid #ebd9b8;color:#845d2d;font-size:12px;line-height:1.8;text-align:center}
+.pwa-notice{position:fixed;z-index:30;right:max(20px,env(safe-area-inset-right));bottom:max(20px,env(safe-area-inset-bottom));width:360px;max-width:calc(100vw - 40px);padding:18px;border:1px solid #d6dfc9;border-radius:12px;background:#fffefa;box-shadow:0 8px 35px #203a2026}
+.pwa-notice>p{font-size:12px;line-height:1.8;color:#566748}
+.pwa-notice>div{display:flex;align-items:center;gap:18px;margin-top:12px}
+.pwa-notice .primary-button{padding:9px 13px}
+footer{padding-bottom:env(safe-area-inset-bottom)}
+@media(max-width:930px){.header-inner nav{gap:18px}.header-inner{gap:12px}.header-actions{gap:7px}.install-button{padding:9px;font-size:11px}}
+@media(max-width:700px){.site-header{min-height:73px}.header-inner{min-height:73px;gap:8px}.header-actions{gap:7px}.install-button{padding:8px;min-height:36px;font-size:10px}.header-location{padding:8px;min-height:36px}.header-location>span{display:none}.header-location>svg{width:16px;height:16px}.pwa-notice{right:15px;bottom:max(15px,env(safe-area-inset-bottom));max-width:calc(100vw - 30px)}}

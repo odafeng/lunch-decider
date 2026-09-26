@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDownUp, ArrowRight, ArrowUpRight, Check, ChevronDown, Clock3, Compass, Dice5, Heart, Leaf, LoaderCircle, LocateFixed, MapPin, MessageSquare, Moon, Navigation, Search, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, Star, Sun, Utensils, X } from 'lucide-react';
 import { CUISINES, type Coordinates, type Cuisine, type Restaurant, type SearchResponse } from '../shared/types';
 import { directionsUrl, filterRestaurants, formatDistance, pickRestaurant, type Filters } from '../shared/logic';
 import { DEMO_CENTER, DEMO_RESTAURANTS } from './demo';
 import { PhotoAttributions, RestaurantPhoto } from './RestaurantPhoto';
+import { Modal } from './Modal';
+import { PwaControls } from './PwaControls';
+import { useOnlineStatus } from './useOnlineStatus';
 
 type InfoPanel = 'help' | 'privacy' | 'terms' | null;
 const priceLabels = ['免費', '$', '$$', '$$$', '$$$$'];
@@ -11,20 +14,6 @@ const cuisineLabel = (r: Restaurant) => r.cuisines.map(c => CUISINES.find(item =
 
 function BowlLogo({ small = false }: { small?: boolean }) {
   return <span className={`bowl-logo ${small ? 'small' : ''}`} aria-hidden="true"><svg viewBox="0 0 40 40"><path d="M7 19h26c0 11-5 17-13 17S7 30 7 19" fill="currentColor"/><path d="M13 13q-3-3 0-7m7 7q-3-3 0-7m7 7q-3-3 0-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none"/></svg></span>;
-}
-
-function Modal({ title, children, onClose, className = '' }: { title: string; children: ReactNode; onClose: () => void; className?: string }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    ref.current?.showModal();
-    const oldOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = oldOverflow; };
-  }, []);
-  return <dialog ref={ref} className={`modal ${className}`} aria-label={title} onCancel={onClose} onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
-    <button className="icon-button modal-close" aria-label="關閉視窗" onClick={onClose}><X size={21}/></button>
-    {children}
-  </dialog>;
 }
 
 function RestaurantCard({ restaurant: r, saved, onSave, onDetails }: { restaurant: Restaurant; saved: boolean; onSave: () => void; onDetails: () => void }) {
@@ -49,6 +38,7 @@ function loadFavorites(): string[] {
 }
 
 export default function App() {
+  const online = useOnlineStatus();
   const [meal, setMeal] = useState<'lunch' | 'dinner'>('lunch');
   const [mode, setMode] = useState<'demo' | 'live'>('demo');
   const [origin, setOrigin] = useState<Coordinates | null>(null);
@@ -83,15 +73,21 @@ export default function App() {
   const cuisinesKey = cuisines.slice().sort().join(',');
 
   useEffect(() => {
+    if (!online) return;
     const controller = new AbortController();
     fetch('/api/config', { signal: controller.signal }).then(r => { if (!r.ok) throw new Error(); return r.json(); }).then(data => {
       if (data.provider === 'google' || data.provider === 'osm') setProvider(data.provider);
     }).catch(() => {});
     return () => controller.abort();
-  }, []);
+  }, [online]);
 
   useEffect(() => {
     if (mode === 'demo') { setRestaurants(DEMO_RESTAURANTS); setLoading(false); setError(''); setLimited(false); return; }
+    if (!online) {
+      setLoading(false); setRestaurants([]); setLimited(false); setSelected(null); setPicked(null);
+      setError('目前離線，無法搜尋真實餐廳。恢復連線後會自動重新搜尋，也可以先體驗示範模式。');
+      return;
+    }
     if (!origin) return;
     const controller = new AbortController();
     setLoading(true); setError(''); setRestaurants([]); setLimited(false);
@@ -109,7 +105,7 @@ export default function App() {
       finally { if (!controller.signal.aborted) setLoading(false); }
     }, 500);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [mode, origin, radius, cuisinesKey, refresh]);
+  }, [mode, origin, radius, cuisinesKey, refresh, online]);
 
   useEffect(() => { setVisibleCount(6); setPicked(null); }, [radius, cuisinesKey, minRating, minReviewCount, prices, openOnly, query, view, sort, mode, origin]);
   useEffect(() => {
@@ -144,6 +140,7 @@ export default function App() {
     setSelected(null); setPicked(null); setView('explore');
   }
   function locate() {
+    if (!online) { setLocationError('目前離線，請連線後再搜尋附近的真實餐廳。'); return; }
     if (!navigator.geolocation) { setLocationError('這個瀏覽器不支援定位，請改用「更換位置」手動選擇。'); return; }
     setLocating(true); setLocationError('');
     navigator.geolocation.getCurrentPosition(position => {
@@ -163,10 +160,11 @@ export default function App() {
     <header className="site-header"><div className="header-inner">
       <a className="brand" href="#" aria-label="呷啥首頁"><BowlLogo/><span className="brand-name">呷啥<span>CHIA SHÁ</span></span></a>
       <nav aria-label="主選單"><button className={view === 'explore' ? 'nav-active' : ''} onClick={() => scrollToResults('explore')}>探索餐廳</button><button className={view === 'saved' ? 'nav-active' : ''} onClick={() => scrollToResults('saved')}>我的收藏{favorites.length > 0 && <span className="nav-count">{favorites.length}</span>}</button><button onClick={() => setInfo('help')}>使用說明</button></nav>
-      <button className="header-location" onClick={locate} disabled={locating}>{locating ? <LoaderCircle size={16} className="spin"/> : <LocateFixed size={16}/>}<span>{locating ? '正在定位…' : '使用我的位置'}</span></button>
+      <div className="header-actions"><PwaControls/><button className="header-location" aria-label={locating ? '正在定位…' : '使用我的位置'} onClick={locate} disabled={locating || !online}>{locating ? <LoaderCircle size={16} className="spin"/> : <LocateFixed size={16}/>}<span>{locating ? '正在定位…' : '使用我的位置'}</span></button></div>
     </div></header>
 
     <main>
+      {!online && <div className="offline-banner" role="status">目前離線。示範抽選仍可使用，搜尋真實餐廳需要網路。</div>}
       <section className="hero"><div className="hero-inner">
         <div className="hero-copy"><div className="eyebrow"><span/> GOOD FOOD, GOOD MOOD</div>
           <h1>今天，<br/>想吃點<span className="hero-highlight">什麼？<svg viewBox="0 0 260 18" preserveAspectRatio="none" aria-hidden="true"><path d="M3 12 Q110 0 254 10"/></svg></span></h1>

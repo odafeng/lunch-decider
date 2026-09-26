@@ -2,6 +2,20 @@
 
 繁體中文餐廳探索應用：取得目前位置、依 100–5,000 公尺半徑搜尋、複選台式、中式、港式、日式、西式、泰式、韓式與蔬食，設定最低星等與評論數，並從符合條件的餐廳隨機選一家。
 
+## 安裝成 PWA
+
+正式網址：https://lunch-decider-eta.vercel.app 。頁首的「安裝 App」會在支援的瀏覽器開啟安裝提示，其他情況則顯示操作說明。
+
+- iPhone／iPad：用 Safari 開啟網站，選「分享」→「加入主畫面」→「加入」。
+- Android／電腦：在 Chrome 或 Edge 點「安裝 App」，或從瀏覽器選單選擇安裝。實際選項由瀏覽器與作業系統決定；已用獨立 App 模式開啟時隱藏安裝按鈕。
+- 首次連線並完成離線準備後，可在斷線時重新開啟 App、使用示範餐廳篩選與抽選。收藏識別碼仍保留在這台裝置。真實餐廳搜尋、即時評分與店家照片需要網路；離線會顯示說明，恢復連線後自動重查原本的搜尋條件。
+- Service worker 只預先快取本站介面、圖示與示範圖片；不快取 `/api`、Google 餐廳資料、店家照片或外部字型。離線使用系統字型。離線重新啟動時回到有標示的示範模式。
+- 偵測到新版本會顯示「立即更新／稍後再說」，不會在操作途中自動重新載入。更新後保留收藏；篩選與搜尋條件重新初始化。每次回到前景、恢復連線及每小時檢查更新。
+
+PWA 僅在正式建置啟用，避免 service worker 干擾開發與 API 模擬。Vercel 已提供 HTTPS；本機可使用 `npm run build`、`npm start` 驗證。安裝資訊由 `vite.config.ts` 產生 `manifest.webmanifest`，圖示原稿為 `public/icons/icon.svg`，可用 `npm run generate:icons` 重新產生 PNG（需 Playwright Chromium）。
+
+參考：[Vite PWA](https://vite-pwa-org.netlify.app/guide/)、[PWA 安裝條件](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable)。
+
 ## 執行
 
 需求：Node.js 22.12+。
@@ -84,9 +98,12 @@ npm test
 npm run build
 npx playwright install chromium
 npm run test:e2e
+npm run test:pwa
 ```
 
 單元／API 測試涵蓋距離、邊界驗證、多重條件、缺失值、抽選、Google 與 OSM 轉換及錯誤；瀏覽器測試涵蓋桌面與手機流程、定位成功／拒絕、收藏持久化、真實 API 介面（模擬上游回應）、錯誤提示與圖片。Playwright 會啟動開發伺服器，或沿用已存在的 5173 服務。
+
+`test:pwa` 會先建置正式版，再於 4173 埠啟動隔離的測試伺服器，驗證 Chromium 安裝條件、PNG 尺寸、真正的 service worker 離線重開、API／照片不快取、恢復連線、安裝引導與版本更新生命週期。測試伺服器僅在記憶體改變 worker 版本，不修改正式版產物，也不會部署到 Vercel。
 
 ## 技術與檔案
 

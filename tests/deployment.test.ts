@@ -10,7 +10,7 @@ function runPhotoProcess(code: string, secret?: string, stdin = '') {
   const env: NodeJS.ProcessEnv = { ...process.env, GOOGLE_PLACES_API_KEY: 'test-only-api-key', VERCEL: '1' };
   if (secret) env.PHOTO_SIGNING_SECRET = secret; else delete env.PHOTO_SIGNING_SECRET;
   const result = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', code], {
-    env, input: stdin, encoding: 'utf8', timeout: 10000,
+    env, input: stdin, encoding: 'utf8', timeout: 10000, windowsHide: true,
   });
   assert.equal(result.status, 0, result.stderr);
   return result.stdout.trim();
